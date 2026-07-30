@@ -11,7 +11,9 @@ readonly swap_threshold_percent=80
 readonly disk_threshold_percent=85
 readonly reminder_seconds=3600
 
-exec 9>"/run/lock/ject-checkin-monitor.lock"
+install -d -m 700 "$state_dir"
+
+exec 9>"$state_dir/monitor.lock"
 if ! flock --nonblock 9; then
   exit 0
 fi
@@ -68,8 +70,6 @@ if (( $# != 0 )); then
   echo "Usage: $0 [--test-discord]" >&2
   exit 64
 fi
-
-install -d -m 700 "$state_dir"
 
 alerting=0
 fail_count=0
