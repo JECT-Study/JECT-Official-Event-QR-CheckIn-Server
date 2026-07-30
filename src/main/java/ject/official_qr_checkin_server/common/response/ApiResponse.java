@@ -13,4 +13,8 @@ public record ApiResponse<T>(
 	public static <T> ApiResponse<T> success(T data) {
 		return new ApiResponse<>(SUCCESS_STATUS, data, Instant.now());
 	}
+
+	public static <T> ApiResponse<T> error(String status, T data) {
+		return new ApiResponse<>(status, data, Instant.now());
+	}
 }
