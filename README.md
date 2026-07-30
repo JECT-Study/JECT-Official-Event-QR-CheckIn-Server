@@ -15,8 +15,9 @@ Local MySQL defaults live in `compose.yaml`. Override them with
 ## Database schema
 
 Hibernate creates the database schema from the JPA entities in both local and
-production environments. `JPA_DDL_AUTO` is set to `create`, so every application
-startup drops the existing tables and data before recreating the schema.
+production environments. `spring.jpa.hibernate.ddl-auto` is fixed to `create`,
+so every application startup drops the existing tables and data before
+recreating the schema.
 
 ## Production
 
