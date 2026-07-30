@@ -1,0 +1,31 @@
+services:
+  app:
+    image: ject-checkin-server:latest
+    container_name: ject-checkin-server
+    restart: unless-stopped
+    env_file:
+      - /opt/ject-checkin/.env
+    environment:
+      JAVA_TOOL_OPTIONS: >-
+        -XX:+UseSerialGC
+        -XX:InitialRAMPercentage=20
+        -XX:MaxRAMPercentage=60
+        -Xss256k
+        -XX:+ExitOnOutOfMemoryError
+        -Djavax.net.ssl.trustStore=/opt/rds/rds-truststore.jks
+        -Djavax.net.ssl.trustStorePassword=changeit
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 256m
+    cpus: 0.75
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://127.0.0.1:8080/actuator/health
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 60s

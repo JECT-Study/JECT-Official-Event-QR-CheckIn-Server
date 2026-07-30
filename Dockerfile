@@ -1,0 +1,42 @@
+FROM eclipse-temurin:26-jdk-noble AS builder
+
+WORKDIR /workspace
+
+COPY gradlew settings.gradle build.gradle ./
+COPY gradle ./gradle
+RUN ./gradlew dependencies --no-daemon
+
+COPY src ./src
+RUN ./gradlew bootJar --no-daemon
+
+FROM eclipse-temurin:26-jre-noble
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /opt/rds \
+    && curl --fail --silent --show-error \
+        https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+        --output /tmp/global-bundle.pem \
+    && cd /tmp \
+    && awk 'split_after == 1 {n++; split_after=0} /-----END CERTIFICATE-----/ {split_after=1} {print > "rds-ca-" n+1 ".pem"}' global-bundle.pem \
+    && for cert in rds-ca-*.pem; do \
+        keytool -importcert -noprompt \
+            -alias "$cert" \
+            -file "$cert" \
+            -keystore /opt/rds/rds-truststore.jks \
+            -storepass changeit; \
+    done \
+    && rm -f /tmp/global-bundle.pem /tmp/rds-ca-*.pem
+
+RUN groupadd --system spring \
+    && useradd --system --gid spring --home-dir /app spring
+
+WORKDIR /app
+COPY --from=builder /workspace/build/libs/*.jar app.jar
+
+USER spring:spring
+EXPOSE 8080
+
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
