@@ -30,7 +30,7 @@ send_discord() {
   local payload
 
   if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
-    logger --tag ject-checkin-monitor "Discord webhook is not configured."
+    logger --tag ject-checkin-monitor "Discord 웹훅이 설정되지 않았습니다."
     return 1
   fi
 
@@ -44,7 +44,7 @@ send_discord() {
         title: $title,
         description: $description,
         color: $color,
-        fields: [{name: "Host", value: $host, inline: true}]
+        fields: [{name: "서버", value: $host, inline: true}]
       }]
     }')
 
@@ -60,8 +60,8 @@ send_discord() {
 
 if [[ "${1:-}" == "--test-discord" ]]; then
   send_discord \
-    "Production monitor test" \
-    "The JECT production monitor can send Discord notifications." \
+    "운영 서버 모니터 테스트" \
+    "JECT 운영 서버 모니터의 Discord 알림 전송이 정상입니다." \
     3447003
   exit 0
 fi
@@ -83,9 +83,23 @@ fi
 
 declare -a reasons=()
 
+translate_state() {
+  case "$1" in
+    running) printf '실행 중' ;;
+    healthy) printf '정상' ;;
+    starting) printf '시작 중' ;;
+    unhealthy) printf '비정상' ;;
+    exited) printf '종료됨' ;;
+    stopped) printf '중지됨' ;;
+    online) printf '온라인' ;;
+    missing|'') printf '찾을 수 없음' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
 mem_available_kib=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
 if (( mem_available_kib < memory_threshold_kib )); then
-  reasons+=("available memory ${mem_available_kib}KiB < ${memory_threshold_kib}KiB")
+  reasons+=("가용 메모리 ${mem_available_kib}KiB (기준 ${memory_threshold_kib}KiB 미만)")
 fi
 
 swap_total_kib=$(awk '/^SwapTotal:/ { print $2 }' /proc/meminfo)
@@ -95,12 +109,12 @@ if (( swap_total_kib > 0 )); then
   swap_used_percent=$(( (swap_total_kib - swap_free_kib) * 100 / swap_total_kib ))
 fi
 if (( swap_used_percent >= swap_threshold_percent )); then
-  reasons+=("swap usage ${swap_used_percent}% >= ${swap_threshold_percent}%")
+  reasons+=("스왑 사용률 ${swap_used_percent}% (기준 ${swap_threshold_percent}% 이상)")
 fi
 
 disk_used_percent=$(df --portability / | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')
 if (( disk_used_percent >= disk_threshold_percent )); then
-  reasons+=("root disk usage ${disk_used_percent}% >= ${disk_threshold_percent}%")
+  reasons+=("루트 디스크 사용률 ${disk_used_percent}% (기준 ${disk_threshold_percent}% 이상)")
 fi
 
 for container in \
@@ -113,13 +127,13 @@ for container in \
     "$container" 2>/dev/null || true)
 
   if [[ "$container_state" != "running" && "$container_state" != "healthy" ]]; then
-    reasons+=("$container state is ${container_state:-missing}")
+    reasons+=("$container 상태: $(translate_state "$container_state")")
   fi
 done
 
 for service in nginx pm2-ubuntu; do
   if ! systemctl is-active --quiet "$service"; then
-    reasons+=("$service is not active")
+    reasons+=("$service 서비스가 실행 중이 아님")
   fi
 done
 
@@ -130,17 +144,17 @@ bot_status=$(runuser -u ubuntu -- env \
   | jq -r '.[] | select(.name == "ject-bot") | .pm2_env.status' \
   | head -n 1)
 if [[ "$bot_status" != "online" ]]; then
-  reasons+=("ject-bot state is ${bot_status:-missing}")
+  reasons+=("ject-bot 상태: $(translate_state "$bot_status")")
 fi
 
 if ! curl --fail --silent --max-time 10 \
   https://checkin-api.ject.kr/actuator/health >/dev/null; then
-  reasons+=("checkin-api HTTPS health check failed")
+  reasons+=("checkin-api HTTPS 상태 확인 실패")
 fi
 
 if ! curl --fail --silent --max-time 10 \
   https://n8n.ject.kr/healthz >/dev/null; then
-  reasons+=("n8n HTTPS health check failed")
+  reasons+=("n8n HTTPS 상태 확인 실패")
 fi
 
 now_epoch=$(date +%s)
@@ -153,7 +167,7 @@ if (( ${#reasons[@]} > 0 )); then
     description=$(printf '%s\n' "${reasons[@]}" | sed 's/^/- /')
 
     if (( alerting == 0 || now_epoch - last_alert_epoch >= reminder_seconds )); then
-      send_discord "Production monitor alert" "$description" 15158332 || true
+      send_discord "운영 서버 이상 감지" "$description" 15158332 || true
       last_alert_epoch=$now_epoch
     fi
 
@@ -165,8 +179,8 @@ else
 
   if (( alerting == 1 && good_count >= 2 )); then
     send_discord \
-      "Production monitor recovered" \
-      "All monitored production checks are healthy again." \
+      "운영 서버 정상 복구" \
+      "모든 운영 서버 상태 확인 항목이 다시 정상입니다." \
       3066993 || true
     alerting=0
     good_count=0
