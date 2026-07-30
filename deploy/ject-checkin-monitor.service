@@ -1,0 +1,15 @@
+[Unit]
+Description=JECT production health and resource monitor
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ject-checkin-monitor
+User=root
+Group=root
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=read-only
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ject-checkin-monitor

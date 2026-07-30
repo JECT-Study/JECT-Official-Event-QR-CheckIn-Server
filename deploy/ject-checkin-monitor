@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+readonly webhook_env="/etc/ject-checkin-monitor.env"
+readonly state_dir="/var/lib/ject-checkin-monitor"
+readonly state_file="$state_dir/state"
+readonly status_file="$state_dir/status"
+readonly memory_threshold_kib=153600
+readonly swap_threshold_percent=80
+readonly disk_threshold_percent=85
+readonly reminder_seconds=3600
+
+exec 9>"/run/lock/ject-checkin-monitor.lock"
+if ! flock --nonblock 9; then
+  exit 0
+fi
+
+if [[ -r "$webhook_env" ]]; then
+  # shellcheck disable=SC1090
+  source "$webhook_env"
+fi
+
+send_discord() {
+  local title="$1"
+  local description="$2"
+  local color="$3"
+  local payload
+
+  if [[ -z "${DISCORD_WEBHOOK_URL:-}" ]]; then
+    logger --tag ject-checkin-monitor "Discord webhook is not configured."
+    return 1
+  fi
+
+  payload=$(jq -n \
+    --arg title "$title" \
+    --arg description "$description" \
+    --arg host "$(hostname)" \
+    --argjson color "$color" \
+    '{
+      embeds: [{
+        title: $title,
+        description: $description,
+        color: $color,
+        fields: [{name: "Host", value: $host, inline: true}]
+      }]
+    }')
+
+  curl \
+    --fail \
+    --silent \
+    --show-error \
+    --max-time 10 \
+    --header "Content-Type: application/json" \
+    --data "$payload" \
+    "$DISCORD_WEBHOOK_URL" >/dev/null
+}
+
+if [[ "${1:-}" == "--test-discord" ]]; then
+  send_discord \
+    "Production monitor test" \
+    "The JECT production monitor can send Discord notifications." \
+    3447003
+  exit 0
+fi
+
+if (( $# != 0 )); then
+  echo "Usage: $0 [--test-discord]" >&2
+  exit 64
+fi
+
+install -d -m 700 "$state_dir"
+
+alerting=0
+fail_count=0
+good_count=0
+last_alert_epoch=0
+
+if [[ -r "$state_file" ]]; then
+  # shellcheck disable=SC1090
+  source "$state_file"
+fi
+
+declare -a reasons=()
+
+mem_available_kib=$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)
+if (( mem_available_kib < memory_threshold_kib )); then
+  reasons+=("available memory ${mem_available_kib}KiB < ${memory_threshold_kib}KiB")
+fi
+
+swap_total_kib=$(awk '/^SwapTotal:/ { print $2 }' /proc/meminfo)
+swap_free_kib=$(awk '/^SwapFree:/ { print $2 }' /proc/meminfo)
+swap_used_percent=0
+if (( swap_total_kib > 0 )); then
+  swap_used_percent=$(( (swap_total_kib - swap_free_kib) * 100 / swap_total_kib ))
+fi
+if (( swap_used_percent >= swap_threshold_percent )); then
+  reasons+=("swap usage ${swap_used_percent}% >= ${swap_threshold_percent}%")
+fi
+
+disk_used_percent=$(df --portability / | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')
+if (( disk_used_percent >= disk_threshold_percent )); then
+  reasons+=("root disk usage ${disk_used_percent}% >= ${disk_threshold_percent}%")
+fi
+
+for container in \
+  ject-checkin-server \
+  ject-checkin-mysql \
+  n8n-main \
+  n8n-postgres; do
+  container_state=$(docker inspect \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "$container" 2>/dev/null || true)
+
+  if [[ "$container_state" != "running" && "$container_state" != "healthy" ]]; then
+    reasons+=("$container state is ${container_state:-missing}")
+  fi
+done
+
+for service in nginx pm2-ubuntu; do
+  if ! systemctl is-active --quiet "$service"; then
+    reasons+=("$service is not active")
+  fi
+done
+
+bot_status=$(runuser -u ubuntu -- env \
+  HOME=/home/ubuntu \
+  PM2_HOME=/home/ubuntu/.pm2 \
+  pm2 jlist 2>/dev/null \
+  | jq -r '.[] | select(.name == "ject-bot") | .pm2_env.status' \
+  | head -n 1)
+if [[ "$bot_status" != "online" ]]; then
+  reasons+=("ject-bot state is ${bot_status:-missing}")
+fi
+
+if ! curl --fail --silent --max-time 10 \
+  https://checkin-api.ject.kr/actuator/health >/dev/null; then
+  reasons+=("checkin-api HTTPS health check failed")
+fi
+
+if ! curl --fail --silent --max-time 10 \
+  https://n8n.ject.kr/healthz >/dev/null; then
+  reasons+=("n8n HTTPS health check failed")
+fi
+
+now_epoch=$(date +%s)
+
+if (( ${#reasons[@]} > 0 )); then
+  fail_count=$((fail_count + 1))
+  good_count=0
+
+  if (( fail_count >= 3 )); then
+    description=$(printf '%s\n' "${reasons[@]}" | sed 's/^/- /')
+
+    if (( alerting == 0 || now_epoch - last_alert_epoch >= reminder_seconds )); then
+      send_discord "Production monitor alert" "$description" 15158332 || true
+      last_alert_epoch=$now_epoch
+    fi
+
+    alerting=1
+  fi
+else
+  fail_count=0
+  good_count=$((good_count + 1))
+
+  if (( alerting == 1 && good_count >= 2 )); then
+    send_discord \
+      "Production monitor recovered" \
+      "All monitored production checks are healthy again." \
+      3066993 || true
+    alerting=0
+    good_count=0
+    last_alert_epoch=$now_epoch
+  elif (( alerting == 0 )); then
+    good_count=0
+  fi
+fi
+
+state_tmp="$state_file.tmp"
+{
+  printf 'alerting=%q\n' "$alerting"
+  printf 'fail_count=%q\n' "$fail_count"
+  printf 'good_count=%q\n' "$good_count"
+  printf 'last_alert_epoch=%q\n' "$last_alert_epoch"
+} >"$state_tmp"
+chmod 600 "$state_tmp"
+mv "$state_tmp" "$state_file"
+
+status_tmp="$status_file.tmp"
+{
+  printf 'checked_at=%s\n' "$(date --iso-8601=seconds)"
+  printf 'mem_available_mib=%s\n' "$((mem_available_kib / 1024))"
+  printf 'swap_used_percent=%s\n' "$swap_used_percent"
+  printf 'disk_used_percent=%s\n' "$disk_used_percent"
+  printf 'alerting=%s\n' "$alerting"
+  if (( ${#reasons[@]} > 0 )); then
+    printf 'reasons=%s\n' "$(IFS=';'; echo "${reasons[*]}")"
+  else
+    printf 'reasons=none\n'
+  fi
+} >"$status_tmp"
+chmod 600 "$status_tmp"
+mv "$status_tmp" "$status_file"
+
+logger --tag ject-checkin-monitor \
+  "mem_available_mib=$((mem_available_kib / 1024)) swap_used_percent=$swap_used_percent disk_used_percent=$disk_used_percent alerting=$alerting reasons=${#reasons[@]}"
