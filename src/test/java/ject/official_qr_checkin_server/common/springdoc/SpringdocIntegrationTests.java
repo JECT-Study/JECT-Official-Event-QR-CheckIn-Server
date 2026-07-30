@@ -29,7 +29,7 @@ class SpringdocIntegrationTests {
 	void exposesGroupedOpenApiDocumentWithCommonResponses() throws Exception {
 		mockMvc.perform(get("/v3/api-docs/check-in-api"))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.info.title").value("JECT 행사 출석 체크 API"))
+			.andExpect(jsonPath("$.info.title").value("젝트 행사 출석체크 API"))
 			.andExpect(jsonPath("$.paths['/swagger-test']").exists())
 			.andExpect(jsonPath(
 				"$.paths['/swagger-test'].get.responses['200'].content['*/*'].schema.properties.status.example"
