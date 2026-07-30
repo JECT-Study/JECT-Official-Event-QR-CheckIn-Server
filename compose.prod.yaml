@@ -25,6 +25,11 @@ services:
       timeout: 5s
       retries: 12
       start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
   app:
     image: ject-checkin-server:latest
@@ -57,6 +62,11 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
 
 volumes:
   mysql-data:

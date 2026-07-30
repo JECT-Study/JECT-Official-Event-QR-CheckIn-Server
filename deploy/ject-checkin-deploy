@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+
+set -Eeuo pipefail
+
+if (( $# != 0 )); then
+  echo "This command does not accept arguments." >&2
+  exit 64
+fi
+
+readonly deployment_dir="/opt/ject-checkin"
+readonly incoming_dir="/home/deploy/incoming"
+readonly app_jar="$incoming_dir/app.jar"
+readonly checksum_file="$incoming_dir/app.jar.sha256"
+readonly compose_file="$deployment_dir/compose.prod.yaml"
+readonly dockerfile="$deployment_dir/deploy/Dockerfile.prebuilt"
+readonly image_name="ject-checkin-server"
+readonly container_name="ject-checkin-server"
+readonly failure_log_dir="/var/log/ject-checkin"
+
+exec 9>"/run/lock/ject-checkin-deploy.lock"
+if ! flock --nonblock 9; then
+  echo "Another production deployment is already running." >&2
+  exit 75
+fi
+
+if [[ ! -f "$app_jar" || -L "$app_jar" || ! -f "$checksum_file" || -L "$checksum_file" ]]; then
+  echo "Deployment artifact is missing or invalid." >&2
+  exit 66
+fi
+
+expected_checksum=$(awk 'NR == 1 { print $1 }' "$checksum_file")
+if [[ ! "$expected_checksum" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "Deployment checksum format is invalid." >&2
+  exit 65
+fi
+
+actual_checksum=$(sha256sum "$app_jar" | awk '{ print $1 }')
+if [[ "$actual_checksum" != "$expected_checksum" ]]; then
+  echo "Deployment checksum verification failed." >&2
+  exit 65
+fi
+
+artifact_size=$(stat --format='%s' "$app_jar")
+if (( artifact_size < 1048576 || artifact_size > 268435456 )); then
+  echo "Deployment artifact size is outside the allowed range." >&2
+  exit 65
+fi
+
+install -d -m 700 "$failure_log_dir"
+
+echo "Building candidate image."
+docker build \
+  --pull \
+  --quiet \
+  --file "$dockerfile" \
+  --tag "$image_name:candidate" \
+  "$incoming_dir"
+
+has_previous_image=0
+if docker image inspect "$image_name:latest" >/dev/null 2>&1; then
+  docker tag "$image_name:latest" "$image_name:rollback"
+  has_previous_image=1
+fi
+
+docker tag "$image_name:candidate" "$image_name:latest"
+
+rollback() {
+  local timestamp failure_log
+  timestamp=$(date -u '+%Y%m%dT%H%M%SZ')
+  failure_log="$failure_log_dir/deploy-failure-$timestamp.log"
+
+  docker logs --tail 200 "$container_name" >"$failure_log" 2>&1 || true
+  chmod 600 "$failure_log"
+
+  if (( has_previous_image == 1 )); then
+    echo "Health check failed. Rolling back."
+    docker tag "$image_name:rollback" "$image_name:latest"
+    (
+      cd "$deployment_dir"
+      docker compose \
+        --file "$compose_file" \
+        up --detach --no-deps --force-recreate app
+    )
+  else
+    echo "Health check failed and no rollback image exists." >&2
+  fi
+}
+
+if ! (
+  cd "$deployment_dir"
+  docker compose \
+    --file "$compose_file" \
+    up --detach --no-deps --force-recreate app
+); then
+  rollback
+  exit 1
+fi
+
+healthy=0
+for _ in $(seq 1 45); do
+  container_health=$(docker inspect \
+    --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' \
+    "$container_name" 2>/dev/null || true)
+
+  if [[ "$container_health" == "healthy" ]] \
+    && curl --fail --silent --max-time 5 \
+      http://127.0.0.1:8080/actuator/health >/dev/null; then
+    healthy=1
+    break
+  fi
+
+  sleep 2
+done
+
+if (( healthy != 1 )); then
+  rollback
+  exit 1
+fi
+
+docker image rm "$image_name:candidate" >/dev/null 2>&1 || true
+docker image prune --force >/dev/null
+rm -f "$app_jar" "$checksum_file"
+
+echo "Production deployment completed successfully."

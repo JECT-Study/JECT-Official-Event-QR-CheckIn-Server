@@ -40,3 +40,7 @@ sudo docker compose -f compose.prod.yaml up -d
 Nginx terminates HTTPS and proxies only to `127.0.0.1:8080`. Certbot manages
 the Let's Encrypt certificate and automatic renewal. MySQL is not published to
 the host network and is reachable only through the private Compose network.
+
+Production deployments run automatically after a successful merge to `main`.
+Operational monitoring, alert thresholds, and log commands are documented in
+[`docs/operations.md`](docs/operations.md).
