@@ -12,6 +12,12 @@ docker compose up -d mysql
 Local MySQL defaults live in `compose.yaml`. Override them with
 `LOCAL_MYSQL_PASSWORD` and `LOCAL_MYSQL_ROOT_PASSWORD` when needed.
 
+## Database schema
+
+Hibernate creates the database schema from the JPA entities in both local and
+production environments. `JPA_DDL_AUTO` is set to `create`, so every application
+startup drops the existing tables and data before recreating the schema.
+
 ## Production
 
 - API: `https://checkin-api.ject.kr`
