@@ -4,5 +4,5 @@ public enum NotionSyncStatus {
     PENDING,
     SUCCESS,
     FAILED,
-    NOT_YET;
+    NOT_YET
 }
