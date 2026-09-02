@@ -5,7 +5,10 @@ services:
     restart: unless-stopped
     env_file:
       - /opt/ject-checkin/.env
+    environment:
+      TZ: Asia/Seoul
     command:
+      - --default-time-zone=+09:00
       - --innodb-buffer-pool-size=128M
       - --innodb-log-buffer-size=8M
       - --max-connections=50
@@ -41,7 +44,10 @@ services:
     env_file:
       - /opt/ject-checkin/.env
     environment:
+      TZ: Asia/Seoul
+      SPRING_JPA_PROPERTIES_HIBERNATE_JDBC_TIME_ZONE: Asia/Seoul
       JAVA_TOOL_OPTIONS: >-
+        -Duser.timezone=Asia/Seoul
         -XX:+UseSerialGC
         -XX:InitialRAMPercentage=20
         -XX:MaxRAMPercentage=60
