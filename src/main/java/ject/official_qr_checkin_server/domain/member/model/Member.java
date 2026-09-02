@@ -10,6 +10,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
 import java.util.List;
 import ject.official_qr_checkin_server.domain.base.BaseTimeEntity;
+import ject.official_qr_checkin_server.domain.event.model.EventParticipant;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,4 +36,7 @@ public class Member extends BaseTimeEntity {
 
     @OneToMany(mappedBy = "member", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EventParticipant> participants;
+
+    @Column(nullable = false)
+    private int generation;
 }
