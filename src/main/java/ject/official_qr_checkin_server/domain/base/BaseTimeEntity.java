@@ -1,4 +1,4 @@
-package ject.official_qr_checkin_server.domain.model.base;
+package ject.official_qr_checkin_server.domain.base;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
