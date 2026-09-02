@@ -8,6 +8,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.OneToMany;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import ject.official_qr_checkin_server.domain.base.BaseTimeEntity;
 import ject.official_qr_checkin_server.domain.event.model.EventParticipant;
@@ -28,10 +30,12 @@ public class Member extends BaseTimeEntity {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false)
+    @Size(max = 10)
+    @Column(nullable = false, length = 10)
     private String name;
 
-    @Column(nullable = false, unique = true)
+    @Pattern(regexp = "^010\\d{8}$")
+    @Column(nullable = false, unique = true, length = 11)
     private String phoneNumber;
 
     @OneToMany(mappedBy = "member", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
