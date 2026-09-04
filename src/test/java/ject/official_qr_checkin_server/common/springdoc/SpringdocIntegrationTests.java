@@ -2,6 +2,7 @@ package ject.official_qr_checkin_server.common.springdoc;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.cookie;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -30,6 +31,9 @@ class SpringdocIntegrationTests {
 		mockMvc.perform(get("/v3/api-docs/check-in-api"))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.info.title").value("젝트 행사 출석체크 API"))
+			.andExpect(jsonPath("$.components.securitySchemes.adminBasicAuth.type").value("http"))
+			.andExpect(jsonPath("$.components.securitySchemes.adminBasicAuth.scheme").value("basic"))
+			.andExpect(jsonPath("$.paths['/admin/events'].post.security[0].adminBasicAuth").isArray())
 			.andExpect(jsonPath("$.paths['/swagger-test']").exists())
 			.andExpect(jsonPath(
 				"$.paths['/swagger-test'].get.responses['200'].content['*/*'].schema.properties.status.example"
@@ -43,6 +47,7 @@ class SpringdocIntegrationTests {
 	void exposesSwaggerUi() throws Exception {
 		mockMvc.perform(get("/swagger-ui.html"))
 			.andExpect(status().is3xxRedirection())
+			.andExpect(cookie().exists("XSRF-TOKEN"))
 			.andExpect(header().string("Location", containsString("/swagger-ui/index.html")));
 	}
 
