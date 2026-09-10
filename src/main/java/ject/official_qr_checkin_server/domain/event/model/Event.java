@@ -33,6 +33,11 @@ public class Event extends BaseTimeEntity {
 
     private LocalDateTime eventDateTime;
 
+    // eventDateTime은 체크인 시작 시각. 이 시각 이상부터 지각이며 제출 마감은 아니다.
+    private LocalDateTime lateFrom;
+
+    private String notionAttendanceProperty;
+
     @OneToMany(mappedBy = "event", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
     private List<EventParticipant> participants;
 
@@ -41,5 +46,14 @@ public class Event extends BaseTimeEntity {
 
     public void changeStatus(EventStatus status) {
         this.status = java.util.Objects.requireNonNull(status, "행사 상태는 필수입니다.");
+    }
+
+    public void configureCheckIn(LocalDateTime start, LocalDateTime lateFrom, String property) {
+        if (lateFrom != null && lateFrom.isBefore(start)) {
+            throw new IllegalArgumentException("지각 시작 시각은 체크인 시작 시각 이후여야 합니다.");
+        }
+        this.eventDateTime = start;
+        this.lateFrom = lateFrom;
+        this.notionAttendanceProperty = property;
     }
 }
