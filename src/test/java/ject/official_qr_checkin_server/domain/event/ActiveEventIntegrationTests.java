@@ -89,7 +89,7 @@ class ActiveEventIntegrationTests {
         eventRepository.flush();
 
         mockMvc.perform(get("/events/active"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value("EVENT-003"));
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value("CHECKIN-001"));
     }
 }

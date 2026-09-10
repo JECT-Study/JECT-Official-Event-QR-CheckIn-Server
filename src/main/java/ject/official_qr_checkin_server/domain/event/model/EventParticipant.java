@@ -44,8 +44,32 @@ public class EventParticipant extends BaseTimeEntity {
 
     private LocalDateTime checkedInAt;
 
+    @Column(unique = true, length = 100)
+    private String checkInKey;
+
+    @Column(length = 36)
+    private String notionPageId;
+
+    private String notionAttendanceProperty;
+
     @Builder.Default
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private NotionSyncStatus notionSyncStatus = NotionSyncStatus.NOT_YET;
+
+    public void checkIn(LocalDateTime requestedAt, CheckedStatus status, String pageId, String property) {
+        if (checkedInAt != null || (checkedStatus != null && checkedStatus != CheckedStatus.UNCHECKED)) {
+            throw new IllegalStateException("이미 체크인된 참석 정보입니다.");
+        }
+        this.checkedInAt = requestedAt;
+        this.checkedStatus = status;
+        this.notionPageId = pageId;
+        this.notionAttendanceProperty = property;
+        this.checkInKey = event.getId() + ":" + pageId;
+        this.notionSyncStatus = NotionSyncStatus.PENDING;
+    }
+
+    public void markNotionSync(NotionSyncStatus status) {
+        this.notionSyncStatus = status;
+    }
 }
