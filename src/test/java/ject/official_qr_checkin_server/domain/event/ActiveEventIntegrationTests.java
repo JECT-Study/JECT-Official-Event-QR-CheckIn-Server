@@ -45,6 +45,24 @@ class ActiveEventIntegrationTests {
     @Autowired
     private EventRepository eventRepository;
 
+    @Test
+    void previewReturnsSampleWithoutEventsAndDoesNotChangeRealEndpoint() throws Exception {
+        eventRepository.deleteAll();
+
+        mockMvc.perform(get("/dev/events/active"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.name").value("[테스트] 온보딩"))
+                .andExpect(jsonPath("$.data.eventDateTime").value("2026-09-19T12:30:00"))
+                .andExpect(jsonPath("$.data.id").doesNotExist())
+                .andExpect(jsonPath("$.timestamp").isNotEmpty());
+
+        mockMvc.perform(get("/events/active"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("EVENT-003"));
+        org.assertj.core.api.Assertions.assertThat(eventRepository.count()).isZero();
+    }
+
     @ParameterizedTest
     @ValueSource(longs = {0, 1, 86400})
     void returnsOnlyActiveEventAtOrAfterStartWithoutAuthentication(long secondsAfterStart) throws Exception {
