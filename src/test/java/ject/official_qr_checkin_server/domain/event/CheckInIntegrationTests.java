@@ -82,7 +82,7 @@ class CheckInIntegrationTests {
     void acceptsWithoutAuthenticationAndUsesExactLateBoundary(long seconds, CheckedStatus expected) throws Exception {
         event();
         at(START.plusSeconds(seconds));
-        mvc.perform(post("/events/active/check-ins").contentType(MediaType.APPLICATION_JSON).content(BODY))
+        mvc.perform(post("/events/active/check-in").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUCCESS"));
         var saved = participants.findAll().getFirst();
         assertThat(saved.getCheckedStatus()).isEqualTo(expected);
@@ -105,7 +105,7 @@ class CheckInIntegrationTests {
     @Test
     void rejectsInvalidRequestAndUnknownMember() throws Exception {
         event();
-        mvc.perform(post("/events/active/check-ins").contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/events/active/check-in").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"name\":\"테스트\",\"phoneNumber\":\"123\"}"))
                 .andExpect(status().isBadRequest());
         when(notion.findActiveMemberPageId(anyString(), anyString()))
@@ -122,7 +122,7 @@ class CheckInIntegrationTests {
             at(START.plusHours(1));
             return PAGE;
         });
-        mvc.perform(post("/events/active/check-ins").contentType(MediaType.APPLICATION_JSON).content(BODY))
+        mvc.perform(post("/events/active/check-in").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().isOk());
         assertThat(participants.findAll().getFirst().getCheckedStatus()).isEqualTo(CheckedStatus.CHECKED);
     }
@@ -237,7 +237,7 @@ class CheckInIntegrationTests {
     }
 
     private void requestError(int code, String error) throws Exception {
-        mvc.perform(post("/events/active/check-ins").contentType(MediaType.APPLICATION_JSON).content(BODY))
+        mvc.perform(post("/events/active/check-in").contentType(MediaType.APPLICATION_JSON).content(BODY))
                 .andExpect(status().is(code)).andExpect(jsonPath("$.status").value(error));
     }
 }

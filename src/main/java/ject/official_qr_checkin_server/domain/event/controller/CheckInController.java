@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class CheckInController {
     private final CheckInService service;
 
-    @PostMapping("/events/active/check-ins")
+    @PostMapping("/events/active/check-in")
     public ApiResponse<Void> checkIn(@Valid @RequestBody CheckInRequest request) {
         service.checkIn(request);
         return ApiResponse.success(null);

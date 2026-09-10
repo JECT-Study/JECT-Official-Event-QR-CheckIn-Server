@@ -1,6 +1,6 @@
 # 5기 체크인
 
-`POST /events/active/check-ins`는 인증 없이 이름과 전화번호를 받는다.
+`POST /events/active/check-in`은 인증 없이 이름과 전화번호를 받는다.
 
 ```json
 {"name":"테스트","phoneNumber":"01000000000"}
