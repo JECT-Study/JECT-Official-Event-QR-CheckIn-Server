@@ -1,5 +1,17 @@
 # 5기 체크인
 
+## 화면 연동용 샘플 API
+
+`GET /dev/events/active`는 운영에서도 인증 없이 사용할 수 있는 고정 샘플 API다.
+실제 조회와 동일한 `ActiveEventResponse`와 공통 응답 형식을 사용한다.
+`data`는 `{"name":"[테스트] 온보딩","eventDateTime":"2026-09-19T12:30:00"}`이며,
+`status`는 `SUCCESS`, `timestamp`는 응답 생성 시각이다. 행사 시각은 KST다.
+DB·노션 접근이나 데이터 변경은 없으며 실제 ACTIVE·시간 조건을 우회하지 않는다.
+샘플 조회 후 실제 체크인 API를 호출하면 운영 행사에 제출되므로 화면 테스트에 연결하지 않는다.
+실서비스 화면에서는 `/events/active`를 사용해야 한다.
+
+## 실제 체크인
+
 `POST /events/active/check-in`은 인증 없이 이름과 전화번호를 받는다.
 
 ```json
