@@ -38,4 +38,8 @@ public class Event extends BaseTimeEntity {
 
     @Enumerated(EnumType.STRING)
     private EventStatus status;
+
+    public void changeStatus(EventStatus status) {
+        this.status = java.util.Objects.requireNonNull(status, "행사 상태는 필수입니다.");
+    }
 }
