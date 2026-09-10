@@ -1,5 +1,7 @@
 package ject.official_qr_checkin_server.domain.event.service;
 
+import java.time.Clock;
+import java.time.LocalDateTime;
 import java.util.List;
 import ject.official_qr_checkin_server.common.exception.BusinessException;
 import ject.official_qr_checkin_server.domain.event.exception.EventErrorCode;
@@ -17,12 +19,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class EventService {
 
     private final EventRepository eventRepository;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public ActiveEventResponse getActiveEvent() {
-        return eventRepository.findByStatus(EventStatus.ACTIVE)
-                .map(ActiveEventResponse::fromEntity)
-                .orElse(null);
+        LocalDateTime requestedAt = LocalDateTime.now(clock);
+        Event event = eventRepository.findByStatus(EventStatus.ACTIVE)
+                .orElseThrow(() -> new BusinessException(EventErrorCode.ACTIVE_EVENT_NOT_FOUND));
+
+        if (requestedAt.isBefore(event.getEventDateTime())) {
+            throw new BusinessException(EventErrorCode.CHECK_IN_NOT_STARTED);
+        }
+
+        return ActiveEventResponse.fromEntity(event);
     }
 
     public void createEvent(final EventDto eventDto) {
