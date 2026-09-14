@@ -1,5 +1,15 @@
 # 5기 체크인
 
+## 프론트 CORS
+
+- 허용 출처: `https://checkin.ject.kr` (정확히 일치하는 HTTPS 출처만 허용)
+- 적용 경로: `/events/**`, `/dev/events/**` (관리자 API 제외)
+- 허용 메서드: `GET`, `POST`, `OPTIONS`
+- 허용 요청 헤더: `Content-Type`
+- 인증정보 포함 요청은 허용하지 않는다. 프론트는 `credentials: 'include'` 또는 `withCredentials: true`를 사용하지 않는다.
+- Spring Security에서 OPTIONS 사전 요청을 처리하며, 허용된 출처에는 정상·오류 응답 모두 CORS 헤더를 제공한다.
+- CORS는 브라우저 정책이며 API 인증이나 비브라우저 요청 차단 기능은 아니다.
+
 ## 화면 연동용 샘플 API
 
 `GET /dev/events/active`는 운영에서도 인증 없이 사용할 수 있는 고정 샘플 API다.

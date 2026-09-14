@@ -1,5 +1,6 @@
 package ject.official_qr_checkin_server.common.security;
 
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,6 +18,8 @@ import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
 import org.springframework.security.web.util.matcher.AndRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
@@ -47,11 +50,27 @@ public class SecurityConfig {
 	}
 
 	@Bean
+	UrlBasedCorsConfigurationSource corsConfigurationSource() {
+		CorsConfiguration configuration = new CorsConfiguration();
+		configuration.setAllowedOrigins(List.of("https://checkin.ject.kr"));
+		configuration.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+		configuration.setAllowedHeaders(List.of("Content-Type"));
+		configuration.setAllowCredentials(false);
+
+		UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+		source.registerCorsConfiguration("/events/**", configuration);
+		source.registerCorsConfiguration("/dev/events/**", configuration);
+		return source;
+	}
+
+	@Bean
 	SecurityFilterChain securityFilterChain(
 		HttpSecurity http,
-		SecurityErrorResponseHandler securityErrorResponseHandler
+		SecurityErrorResponseHandler securityErrorResponseHandler,
+		UrlBasedCorsConfigurationSource corsConfigurationSource
 	) throws Exception {
 		http
+			.cors(cors -> cors.configurationSource(corsConfigurationSource))
 			.csrf(csrf -> csrf
 				.spa()
 				.requireCsrfProtectionMatcher(ADMIN_CSRF_MATCHER)
