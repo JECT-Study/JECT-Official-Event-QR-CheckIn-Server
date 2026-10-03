@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -50,6 +51,53 @@ class EventTimetableIntegrationTests {
     void setTime() {
         when(clock.getZone()).thenReturn(KST);
         at(START);
+    }
+
+    @ParameterizedTest
+    @ValueSource(longs = {-86400, 0, 86400})
+    void previewReturnsFixedSampleRegardlessOfTimeWithoutEvents(long seconds) throws Exception {
+        at(START.plusSeconds(seconds));
+        mvc.perform(get("/dev/events/active/timetable").header("Origin", ORIGIN))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", ORIGIN))
+                .andExpect(jsonPath("$.data", hasSize(6)))
+                .andExpect(jsonPath("$.timestamp").isNotEmpty())
+                .andExpect(jsonPath("$.data[0].id").doesNotExist())
+                .andExpect(jsonPath("$.data[0].eventId").doesNotExist())
+                .andExpect(content().json("""
+                        {"status":"SUCCESS","data":[
+                          {"startTime":"13:30","endTime":"14:00","schedule":"체크인"},
+                          {"startTime":"14:10","endTime":"15:00","schedule":"젝트 사용 툴 세미나"},
+                          {"startTime":"15:10","endTime":"15:30","schedule":"쉬는시간"},
+                          {"startTime":"15:30","endTime":"17:30","schedule":"집중 협업 시간"},
+                          {"startTime":"17:30","endTime":"18:00","schedule":"공지 & 만족도 조사 & 파트별 단체사진"},
+                          {"startTime":"18:00","endTime":null,"schedule":"퇴장"}
+                        ]}
+                        """));
+        assertThat(events.count()).isZero();
+        assertThat(timetable.count()).isZero();
+        mvc.perform(get(PATH)).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value("EVENT-003"));
+    }
+
+    @Test
+    void previewIgnoresInactiveEventAndRealTimetable() throws Exception {
+        item(event(EventStatus.INACTIVE), "09:00", "10:00", "실제 DB 일정");
+        mvc.perform(get("/dev/events/active/timetable"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data", hasSize(6)))
+                .andExpect(jsonPath("$.data[0].schedule").value("체크인"));
+        assertThat(timetable.count()).isEqualTo(1);
+        mvc.perform(get(PATH)).andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value("CHECKIN-001"));
+    }
+
+    @Test
+    void previewAllowsCorsPreflightWithoutCredentials() throws Exception {
+        mvc.perform(options("/dev/events/active/timetable").header("Origin", ORIGIN)
+                        .header("Access-Control-Request-Method", "GET"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Access-Control-Allow-Origin", ORIGIN))
+                .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
     }
 
     @Test
@@ -143,7 +191,8 @@ class EventTimetableIntegrationTests {
     @Test
     void publishesSwaggerOperation() throws Exception {
         mvc.perform(get("/v3/api-docs/check-in-api")).andExpect(status().isOk())
-                .andExpect(jsonPath("$.paths['/events/active/timetable'].get").exists());
+                .andExpect(jsonPath("$.paths['/events/active/timetable'].get").exists())
+                .andExpect(jsonPath("$.paths['/dev/events/active/timetable'].get").exists());
     }
 
     private Event event(EventStatus status) {
