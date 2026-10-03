@@ -20,6 +20,16 @@ DB·노션 접근이나 데이터 변경은 없으며 실제 ACTIVE·시간 조�
 샘플 조회 후 실제 체크인 API를 호출하면 운영 행사에 제출되므로 화면 테스트에 연결하지 않는다.
 실서비스 화면에서는 `/events/active`를 사용해야 한다.
 
+### 화면 연동용 타임테이블
+
+`GET /dev/events/active/timetable`는 세미나 예시 일정 6개를 고정 반환한다.
+인증·행사 ACTIVE 여부·체크인 시작 시각과 관계없이 `200 / SUCCESS`로 응답하며 DB·노션에 접근하지 않는다.
+응답은 아래 실제 타임테이블 조회 예시와 같은 `data` 배열이며 `timestamp`만 응답 시각에 따라 달라진다.
+`endTime: null`은 종료 미정으로, 프론트에서 `18:00 ~`로 표시한다.
+`https://checkin.ject.kr`의 CORS 조회를 허용하며 인증정보 포함 옵션은 사용하지 않는다.
+기존 행사 샘플(`/dev/events/active`)은 온보딩 예시이며 이 API는 별도의 세미나 예시다.
+운영 DB 일정이 바뀌어도 샘플은 자동 갱신되지 않는다. 실서비스 화면은 `/events/active/timetable`을 사용한다.
+
 ## 행사 타임테이블 조회
 
 관련 이슈: [#19](https://github.com/JECT-Study/JECT-Official-Event-QR-CheckIn-Server/issues/19)
