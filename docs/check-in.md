@@ -20,6 +20,54 @@ DB·노션 접근이나 데이터 변경은 없으며 실제 ACTIVE·시간 조�
 샘플 조회 후 실제 체크인 API를 호출하면 운영 행사에 제출되므로 화면 테스트에 연결하지 않는다.
 실서비스 화면에서는 `/events/active`를 사용해야 한다.
 
+## 행사 타임테이블 조회
+
+관련 이슈: [#19](https://github.com/JECT-Study/JECT-Official-Event-QR-CheckIn-Server/issues/19)
+
+`GET /events/active/timetable`는 인증 없이 현재 ACTIVE 행사의 타임테이블을 조회한다.
+기존 행사 조회와 동일하게 서버 KST 기준 `eventDateTime` 정각부터 허용한다.
+노션을 조회하지 않으며, 행사 ID·일정 ID는 응답에 노출하지 않는다.
+
+```json
+{
+  "status": "SUCCESS",
+  "data": [
+    {"startTime": "13:30", "endTime": "14:00", "schedule": "체크인"},
+    {"startTime": "14:10", "endTime": "15:00", "schedule": "젝트 사용 툴 세미나"},
+    {"startTime": "15:10", "endTime": "15:30", "schedule": "쉬는시간"},
+    {"startTime": "15:30", "endTime": "17:30", "schedule": "집중 협업 시간"},
+    {"startTime": "17:30", "endTime": "18:00", "schedule": "공지 & 만족도 조사 & 파트별 단체사진"},
+    {"startTime": "18:00", "endTime": null, "schedule": "퇴장"}
+  ],
+  "timestamp": "2026-10-10T04:30:00Z"
+}
+```
+
+- 시각은 해당 행사 날짜의 KST `HH:mm`이다. 종료 미정은 `null`이며 프론트에서 `18:00 ~`로 표시한다.
+- 일정은 일반 텍스트로 표시한다. `<br>` 같은 HTML을 저장할 필요가 없다.
+- 시작 시각 오름차순, 같은 시작 시각은 항목 ID 오름차순으로 정렬한다.
+- 일정 사이 공백과 겹침은 자동 수정하지 않는다. 미등록 시 `200`과 `data: []`를 반환한다.
+- 행사 없음: `404 / EVENT-003`, INACTIVE 행사만 있음: `409 / CHECKIN-001`, 시작 전: `409 / EVENT-004`.
+- 타임테이블의 체크인 종료 표시는 안내용이다. `lateFrom`이나 실제 접수 마감 조건을 변경하지 않는다.
+
+### DB 직접 입력
+
+관리자 쓰기 API와 자동 시드는 제공하지 않는다. 배포 시 `ddl-auto=update`가 신규 `event_timetable` 테이블을 만든다.
+현재 예시 일정은 테스트 데이터일 뿐 운영 DB에는 입력하지 않았다.
+
+| 컬럼 | 입력 규칙 |
+| --- | --- |
+| id | 자동 증가, 입력 생략 |
+| event_id | 실제 대상 행사의 ID (외래 키) |
+| start_time | 필수, 행사 당일 KST 시각 (`13:30:00`처럼 초는 00으로 입력) |
+| end_time | 종료 미정이면 NULL, 지정 시 같은 날 start_time보다 뒤 |
+| schedule | 공백이 아닌 255자 이하 일반 텍스트 |
+| created_at / updated_at | JPA 저장 시 자동 기록. SQL 직접 입력·수정 시 운영자가 UTC 시각 입력 |
+
+엔티티는 행사에 LAZY 다대일로 연결된다. 행사 삭제 전 연결된 타임테이블 항목을 먼저 삭제해야 한다.
+DB 직접 입력은 자바 검증을 거치지 않으므로 일정 공백·길이·분 단위 입력 규칙을 확인한다.
+날짜를 넘기는 일정은 이번 구현 범위에 포함하지 않는다.
+
 ## 실제 체크인
 
 `POST /events/active/check-in`은 인증 없이 이름과 전화번호를 받는다.

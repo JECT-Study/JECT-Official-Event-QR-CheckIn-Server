@@ -24,6 +24,11 @@ public class EventService {
 
     @Transactional(readOnly = true)
     public ActiveEventResponse getActiveEvent() {
+        return ActiveEventResponse.fromEntity(findActiveEventForRead());
+    }
+
+    // 행사 정보와 타임테이블 조회에 동일한 공개 조건을 적용한다. 읽기 트랜잭션 안에서 호출한다.
+    Event findActiveEventForRead() {
         LocalDateTime requestedAt = LocalDateTime.now(clock);
         Event event = eventRepository.findByStatus(EventStatus.ACTIVE)
                 .orElseThrow(() -> new BusinessException(eventRepository.existsByStatus(EventStatus.INACTIVE)
@@ -33,7 +38,7 @@ public class EventService {
             throw new BusinessException(EventErrorCode.CHECK_IN_NOT_STARTED);
         }
 
-        return ActiveEventResponse.fromEntity(event);
+        return event;
     }
 
     public void createEvent(final EventDto eventDto) {
